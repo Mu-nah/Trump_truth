@@ -1,19 +1,37 @@
 const express = require("express");
 const puppeteer = require("puppeteer");
 const axios = require("axios");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const WEBHOOK_URL = "https://n8n-fk9q.onrender.com/webhook/94a58564-557a-478a-9eb0-a478bbd330e8"; // 🔁 Replace this with your actual n8n webhook
-let lastSentId = "";
+const WEBHOOK_URL = "https://n8n-fk9q.onrender.com/webhook/94a58564-557a-478a-9eb0-a478bbd330e8";
 
-const sleep = ms => new Promise(res => setTimeout(res, ms));
+// Persistent ID tracking
+const LAST_ID_FILE = "./lastSentId.txt";
+
+function saveLastId(id) {
+  fs.writeFileSync(LAST_ID_FILE, id);
+}
+
+function loadLastId() {
+  try {
+    return fs.readFileSync(LAST_ID_FILE, "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
+let lastSentId = loadLastId();
 
 async function getLatestTrumpPost() {
-  const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-  const page = await browser.newPage();
+  const browser = await puppeteer.launch({
+    headless: "new",
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  });
 
+  const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
   await page.goto("https://trumpstruth.org", {
     waitUntil: "networkidle2",
@@ -37,24 +55,26 @@ async function getLatestTrumpPost() {
   return post;
 }
 
-async function loopMonitor() {
-  while (true) {
-    try {
-      const latest = await getLatestTrumpPost();
-      if (!latest?.id || latest.id === lastSentId) {
-        await sleep(60000); // wait before next check
-        continue;
-      }
+// Manual or cronjob trigger (GET request)
+app.get("/check", async (_, res) => {
+  try {
+    const latest = await getLatestTrumpPost();
+    if (!latest?.id || latest.id === lastSentId) {
+      return res.send("⏸️ No new post.");
+    }
 
-      lastSentId = latest.id;
-      await axios.post(WEBHOOK_URL, latest);
-    } catch (_) {}
-    await sleep(60000); // every 1 min
+    lastSentId = latest.id;
+    saveLastId(latest.id);
+    await axios.post(WEBHOOK_URL, latest);
+
+    res.send("✅ New post sent to n8n.");
+  } catch (err) {
+    res.status(500).send("❌ Error while checking.");
   }
-}
+});
 
-app.get("/", (_, res) => res.send("✅ Trump bot is running"));
+app.get("/", (_, res) => res.send("✅ Trump bot is live and ready"));
 
 app.listen(PORT, () => {
-  loopMonitor();
+  console.log(`✅ Listening on port ${PORT}`);
 });
