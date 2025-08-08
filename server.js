@@ -6,7 +6,7 @@ const fs = require("fs");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const WEBHOOK_URL = "https://n8n-fk9q.onrender.com/webhook/94a58564-557a-478a-9eb0-a478bbd330e8";
+const WEBHOOK_URL = "https://n8nxai.onrender.com/webhook/94a58564-557a-478a-9eb0-a478bbd330e8";
 
 // Persistent ID tracking
 const LAST_ID_FILE = "./lastSentId.txt";
